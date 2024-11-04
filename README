@@ -1,1 +1,61 @@
 doc/README
+
+How to Hack KeePass Passwords using Hashcat 02 May 2017
+
+
+
+Let's talk a little about passwords today. Have we all heard of the infamous LinkedIn password breach back in 2012? Over 117 million encrypted passwords were leaked and put up for sale.
+
+Massive data dumps such as these become treasure troves for research of human behavior in the context of security. The US Company Preempt revealed that a staggering 35% of the passwords in the dump could already be found in password dictionaries available prior to the breach. Statistics like these remind us to keep our passwords as strong as possible.
+
+Today we are going to perform a simple attack on a KeePass database file and attempt to break a master password. For those unfamiliar with the software, KeePass is a popular open source password manager. Say you have 50 different passwords for different purposes that you need to remember, how do you go about remembering them all? Some people will write them down in a book. Others may store them in a plain text file - definitely not recommended! A third approach is to use a software application like KeePass. What it does is encrypt all passwords provided to the tool using AES in combination with a master password and optionally a key file. When a user then wishes to recall any particular password they will provide their master password to the tool; in response, the tool will decrypt all passwords in plain text allowing the user to check the entry of their interest.
+
+For the software system to verify the validity of the master password provided it will apply a hashing algorithm to the string given in concatenation with other data. All those who have meddled in the password cracking world know that whenever a hash is available a brute force or dictionary attack can be launched.
+
+So how can we do this? The first step is to extract the hash out of the KeePass database file. Here is a KeePass database we created with a very simple password that we will use for the course of this tutorial.
+
+There is no need to re-invent the wheel here. A utility called "keepass2john" is available from the John the Ripper github repository. Let's jump on a Linux box and install it as follows.
+
+[user]~$ git clone https://github.com/piyushcse29/john-the-ripper.git
+[user]~$ cd john-the-ripper/src
+[user]~$ make
+[user]~$ make clean generic
+[user]~$ cd ../run
+Next, copy the KeePass database file to the current directory and run the "keepass2john" binary on it.
+
+[user]~$ ./keepass2john CrackThis.kdb > CrackThis.hash
+[user]~$ cat CrackThis.hash
+CrackThis:$keepass$*1*6000*0*dfb86938fedd22b8235c4de4b02e5bb3*c292fa502cbb0e912f30c1e1b6829a2c04ebe30477cb269d462fbbbeeb9360a6*b85fb0e07f3edbd4123db2c829b79355*6d4857a728900d4da4fad66999233e5c647e5354330d31be3a47bbdd102a5ca7*0*CrackThis
+We now have our extracted hash file ready to be cracked. The next step is to download a password cracking utility. The greatest by far is Hashcat available from here. What makes Hashcat the leader of such tools is its massive collection of predefined hashing algorithms and its ability to utilize a computers GPU to increase cracking speeds by an enormous degree.
+
+As of Hashcat version 3.0 the software supports KeePass with no custom algorithms needed to be defined. We can run a quick grep command to learn the switch value of 13400 needed for our invocation of the binary.
+
+[user]~$ ./hashcat --help | grep -i "KeePass"
+13400 | KeePass 1 (AES/Twofish) and KeePass 2 (AES) | Password Managers
+Next, we need to make an edit to our hash file. The hashcat binary does not expect the name of our KeePass database to be pre-pended to our hash so we will have to trim the string with a text editor; after doing so our hash file will look as follows.
+
+[user]~$ cat CrackThis.hash
+$keepass$*1*6000*0*dfb86938fedd22b8235c4de4b02e5bb3*c292fa502cbb0e912f30c1e1b6829a2c04ebe30477cb269d462fbbbeeb9360a6*b85fb0e07f3edbd4123db2c829b79355*6d4857a728900d4da4fad66999233e5c647e5354330d31be3a47bbdd102a5ca7*0*CrackThis
+We may now launch our attack. We used a password dictionary we picked arbitrarily called "cracklib-words" available from here (updated).
+
+[user]~$ # -m 13400 => KeePass Hash Provided
+[user]~$ # -a 0 => Dictionary Attack
+[user]~$ # -w 1 => Low Latency Desktop Profile
+[user]~$
+[user]~$ ./hashcat -m 13400 -a 0 -w 1 CrackThis.hash cracklib-words
+Our machine proceeded to crack the master password in 12 minutes with the following results.
+
+Session..........: hashcat
+Status...........: Cracked
+Hash.Type........: KeePass 1 (AES/Twofish) and KeePass 2 (AES)
+Hash.Target......: $keepass$*1*6000*124*dfb86938fedd22b8235c4de4b02e5b...
+Time.Started.....: Mon May 1 20:53:17 2017 (12 mins, 8 secs)
+Time.Estimated...: Mon May 1 21:05:25 2017 (0 secs)
+Guess.Base.......: File (cracklib-words)
+Guess.Queue......: 1/1 (100.00%)
+Speed.Dev.#2.....: 1463 H/s (1.85ms)
+Recovered........: 1/1 (100.00%) Digests, 1/1 (100.00%) Salts
+Progress.........: 1064960/1671704 (63.71%)
+Rejected.........: 0/1064960 (0.00%)
+Restore.Point....: 1054720/1671704 (63.09%)
+So what was the password you may ask? Sorry, if you want to know that you are going to have to crack it yourself :) Thanks for reading.
